@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ระบบจัดสต๊อกสินค้า (Demo)</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --primary:#246;
+    --secondary:#6b7280;
+    --danger:#c23;
+    --ok:#28a745;
+    --bg:#f6f8fb;
+    --card:#fff;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:'Prompt', sans-serif; margin:0; background:var(--bg); color:#111;}
+  .container{max-width:1200px; margin:24px auto; padding:16px;}
+  h1{text-align:center; margin-bottom:20px; color:var(--primary);}
+  
+  /* Dashboard summary */
+  .summary{display:flex; flex-wrap:wrap; gap:16px; margin-bottom:20px;}
+  .summary div{flex:1; background:var(--card); padding:16px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.08); text-align:center;}
+  .summary h2{margin-bottom:6px;}
+  .summary p{color:#555;}
+
+  /* Grid layout */
+  .grid{display:grid; grid-template-columns:360px 1fr; gap:20px;}
+  @media(max-width:880px){.grid{grid-template-columns:1fr;}}
+
+  /* Card style */
+  .card{background:var(--card); padding:16px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+
+  /* Form */
+  form{display:flex; flex-direction:column; gap:10px;}
+  label{font-size:13px; color:#555;}
+  input, select, textarea{padding:8px; border-radius:6px; border:1px solid #ddd; font-size:14px;}
+  .row{display:flex; gap:8px; flex-wrap:wrap;}
+  .btn{padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;}
+  .btn.primary{background:var(--primary); color:#fff;}
+  .btn.secondary{background:var(--secondary); color:#fff;}
+  .btn.danger{background:var(--danger); color:#fff;}
+  .btn.ghost{background:transparent; color:var(--primary); border:1px solid #ddd;}
+  .btn.small{padding:4px 8px; font-size:12px;}
+
+  /* Table */
+  table{width:100%; border-collapse:collapse; margin-top:12px; background:#fff; border-radius:6px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05);}
+  th,td{padding:10px; text-align:left; font-size:14px; border-bottom:1px solid #eee;}
+  th{background:#fbfdff; color:#333; position:sticky; top:0;}
+  tr:hover{background:#f0f4f8;}
+  .muted{color:#777;}
+  .badge{display:inline-block; padding:4px 8px; border-radius:999px; background:#eef7f1; color:var(--ok); font-weight:600;}
+  .qty-negative{color:var(--danger); font-weight:700;}
+
+  /* Footer */
+  .footer{margin-top:16px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>ระบบจัดการสต๊อกสินค้า</h1>
+
+  <!-- Dashboard -->
+  <div class="summary">
+    <div><h2 id="total-items">0</h2><p>จำนวนรายการ</p></div>
+    <div><h2 id="total-quantity">0</h2><p>จำนวนรวม</p></div>
+    <div><h2 id="total-revenue">0</h2><p>รายได้รวม (บาท)</p></div>
+  </div>
+
+  <div class="grid">
+    <!-- Sidebar form -->
+    <div class="card">
+      <form id="itemForm">
+        <input type="hidden" id="itemId" />
+        <label>ชื่อสินค้า<input id="name" required placeholder="เช่น ไข่ไก่ เบอร์ 0" /></label>
+        <label>SKU<input id="sku" placeholder="SKU1234 (ไม่บังคับ)" /></label>
+        <label>หมวดหมู่<input id="category" placeholder="อาหาร / อุปกรณ์" /></label>
+        <label>จำนวนเริ่มต้น<input id="quantity" type="number" value="0" /></label>
+        <label>หน่วย<input id="unit" placeholder="ชิ้น, กล่อง" /></label>
+        <label>ราคาต่อหน่วย<input id="price" type="number" step="0.01" placeholder="เช่น 39.50" /></label>
+        <label>หมายเหตุ<textarea id="note" rows="3" placeholder="บันทึกสั้นๆ"></textarea></label>
+        <div class="row">
+          <button class="btn primary" id="saveBtn" type="submit">บันทึก</button>
+          <button class="btn secondary" id="clearBtn" type="button">ล้าง</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Main table -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <input id="search" placeholder="ค้นหา..." style="flex:1; padding:6px; border-radius:6px; border:1px solid #ddd;">
+        <select id="filterCategory" style="padding:6px; border-radius:6px; border:1px solid #ddd;">
+          <option value="">-- แสดงทุกหมวดหมู่ --</option>
+        </select>
+        <button class="btn secondary" id="clearFilter">ล้างตัวกรอง</button>
+      </div>
+
+      <table id="inventoryTable" aria-live="polite">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>ชื่อ / SKU</th>
+            <th>หมวด</th>
+            <th>จำนวน</th>
+            <th>ราคา/หน่วย</th>
+            <th>หมายเหตุ</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="tBody"></tbody>
+      </table>
+
+      <div class="footer">
+        <div id="summary" class="muted">ไม่มีรายการ</div>
+        <div>
+          <button class="btn small secondary" id="increaseAll">เพิ่ม +1</button>
+          <button class="btn small danger" id="decreaseAll">ลด -1</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// โหลด/บันทึก inventory จาก localStorage
+const STORAGE_KEY='inventory_data_v1';
+function uid(){return 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function loadInventory(){return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}
+function saveInventory(list){localStorage.setItem(STORAGE_KEY,JSON.stringify(list)); renderTable(list);}
+function formatPrice(p){return (p===''||p==null||isNaN(p))?'-':Number(p).toLocaleString();}
+
+// render table & dashboard
+function renderTable(list=null){
+  if(!list) list=loadInventory();
+  const tbody=document.getElementById('tBody');
+  tbody.innerHTML='';
+  const search=document.getElementById('search').value.trim().toLowerCase();
+  const filterCat=document.getElementById('filterCategory').value;
+  let visible=list.filter(item=>{
+    const hay=(item.name+' '+(item.sku||'')+' '+(item.category||'')).toLowerCase();
+    if(search&&!hay.includes(search)) return false;
+    if(filterCat&&item.category!==filterCat) return false;
+    return true;
+  });
+  visible.sort((a,b)=>(b.quantity-a.quantity)||a.name.localeCompare(b.name));
+  visible.forEach((item,idx)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${idx+1}</td>
+      <td><strong>${escapeHtml(item.name)}</strong><br><span class="muted">${escapeHtml(item.sku||'')}</span></td>
+      <td>${escapeHtml(item.category||'')}</td>
+      <td><span class="${item.quantity<0?'qty-negative':''}">${item.quantity}</span>
+        <div style="margin-top:6px;">
+          <button class="btn small" data-act="inc" data-id="${item.id}">+1</button>
+          <button class="btn small secondary" data-act="dec" data-id="${item.id}">-1</button>
+          <button class="btn small ghost" data-act="set" data-id="${item.id}">ตั้งค่า</button>
+        </div>
+      </td>
+      <td>${item.price?formatPrice(item.price)+' / '+(item.unit||'-'):'-'}</td>
+      <td>${escapeHtml(item.note||'')}</td>
+      <td>
+        <button class="btn small" data-act="edit" data-id="${item.id}">แก้ไข</button>
+        <button class="btn small secondary" data-act="copy" data-id="${item.id}">ก็อป</button>
+        <button class="btn small danger" data-act="del" data-id="${item.id}">ลบ</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  // summary
+  const totalItems=list.length;
+  const totalQty=list.reduce((s,i)=>s+Number(i.quantity||0),0);
+  const totalRevenue=list.reduce((s,i)=>s+Number(i.quantity||0)*(Number(i.price)||0),0);
+  document.getElementById('summary').textContent=`รายการ ${totalItems} รายการ — จำนวนรวม ${totalQty} — รายได้รวม ${totalRevenue.toLocaleString()} บาท`;
+  document.getElementById('total-items').textContent=totalItems;
+  document.getElementById('total-quantity').textContent=totalQty;
+  document.getElementById('total-revenue').textContent=totalRevenue.toLocaleString();
+  updateCategoryFilter(list);
+}
+
+function escapeHtml(s){return s?String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])):'';}
+function updateCategoryFilter(list){
+  const sel=document.getElementById('filterCategory');
+  const cats=Array.from(new Set(list.map(i=>(i.category||'').trim()).filter(x=>x)));
+  const current=sel.value;
+  sel.innerHTML='<option value="">-- แสดงทุกหมวดหมู่ --</option>';
+  cats.sort().forEach(c=>{const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt);});
+  if([...sel.options].some(o=>o.value===current)) sel.value=current;
+}
+
+// form handlers
+function resetForm(){document.getElementById('itemForm').reset(); document.getElementById('itemId').value=''; document.getElementById('saveBtn').textContent='บันทึก';}
+function fillFormForEdit(item){
+  document.getElementById('itemId').value=item.id;
+  document.getElementById('name').value=item.name;
+  document.getElementById('sku').value=item.sku||'';
+  document.getElementById('category').value=item.category||'';
+  document.getElementById('quantity').value=item.quantity||0;
+  document.getElementById('unit').value=item.unit||'';
+  document.getElementById('price').value=item.price||'';
+  document.getElementById('note').value=item.note||'';
+  document.getElementById('saveBtn').textContent='อัปเดต';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  renderTable();
+  const form=document.getElementById('itemForm');
+  form.addEventListener('submit',e=>{
+    e.preventDefault();
+    const id=document.getElementById('itemId').value||uid();
+    const item={id,
+      name:document.getElementById('name').value.trim(),
+      sku:document.getElementById('sku').value.trim(),
+      category:document.getElementById('category').value.trim(),
+      quantity:Number(document.getElementById('quantity').value)||0,
+      unit:document.getElementById('unit').value.trim(),
+      price:document.getElementById('price').value===''?'':Number(document.getElementById('price').value),
+      note:document.getElementById('note').value.trim(),
+      createdAt:Date.now()};
+    if(!item.name){alert('กรุณากรอกชื่อสินค้า'); return;}
+    const current=loadInventory();
+    const exists=current.find(i=>i.id===id);
+    if(exists){saveInventory(current.map(i=>i.id===id?{...i,...item}:i));}
+    else{current.push(item); saveInventory(current);}
+    resetForm();
+  });
+  document.getElementById('clearBtn').addEventListener('click',resetForm);
+  document.getElementById('search').addEventListener('input',()=>renderTable());
+  document.getElementById('filterCategory').addEventListener('change',()=>renderTable());
+  document.getElementById('clearFilter').addEventListener('click',()=>{
+    document.getElementById('search').value='';
+    document.getElementById('filterCategory').value='';
+    renderTable();
+  });
+
+  // Table action delegation
+  document.getElementById('inventoryTable').addEventListener('click',e=>{
+    const btn=e.target.closest('button');
+    if(!btn) return;
+    const act=btn.dataset.act;
+    const id=btn.dataset.id;
+    const list=loadInventory();
+    const idx=list.findIndex(i=>i.id===id);
+    if(act==='edit'){if(idx>=0) fillFormForEdit(list[idx]);}
+    else if(act==='del'){if(idx>=0&&confirm('ลบรายการนี้?')){list.splice(idx,1); saveInventory(list);}}
+    else if(act==='copy'){if(idx>=0){list.push({...list[idx],id:uid(),name:list[idx].name+' (copy)'}); saveInventory(list);}}
+    else if(act==='inc'||act==='dec'){if(idx>=0){list[idx].quantity+=(act==='inc'?1:-1); saveInventory(list);}}
+    else if(act==='set'){if(idx>=0){const v=prompt('ตั้งค่าจำนวนใหม่',list[idx].quantity); if(v!==null){const n=Number(v); if(!isNaN(n)){list[idx].quantity=n; saveInventory(list);} else alert('ค่าไม่ถูกต้อง');}}}
+  });
+
+  document.getElementById('increaseAll').addEventListener('click',()=>{const list=loadInventory().map(i=>({...i,quantity:Number(i.quantity||0)+1})); saveInventory(list);});
+  document.getElementById('decreaseAll').addEventListener('click',()=>{if(confirm('ลดแต่ละรายการ -1?')){const list=loadInventory().map(i=>({...i,quantity:Number(i.quantity||0)-1})); saveInventory(list);}});
+});
+
+</script>
+</body>
+</html>
